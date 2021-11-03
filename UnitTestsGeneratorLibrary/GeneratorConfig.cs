@@ -4,7 +4,7 @@ namespace UnitTestsGeneratorLibrary
 {
     public class GeneratorConfig
     {
-        public List<string> Filenames { get; set; }
+        public List<string> Filenames { get; set; } = new List<string>();
         
         public string EndpointFolder { get; set; }
         
