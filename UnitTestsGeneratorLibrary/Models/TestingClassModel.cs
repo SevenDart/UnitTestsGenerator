@@ -10,11 +10,13 @@ namespace UnitTestsGeneratorLibrary.Models
     {
         public string ClassName { get; set; }
 
-        public IEnumerable<TestingMethodModel> Methods { get; set; }
+        public List<TestingMethodModel> Methods { get; set; }
         
-        public IEnumerable<ArgumentModel> ConstructorArguments { get; set; } 
+        public List<ArgumentModel> ConstructorArguments { get; set; } 
+        
+        public List<string> UsedNamespaces { get; set; }
 
-        private static IEnumerable<ClassDeclarationSyntax> GetClassesDeclarations(SyntaxNode syntaxNode)
+        private static List<ClassDeclarationSyntax> GetClassesDeclarations(SyntaxNode syntaxNode)
         {
             var result = new List<ClassDeclarationSyntax>();
             if (syntaxNode.IsKind(SyntaxKind.ClassDeclaration))
@@ -28,7 +30,7 @@ namespace UnitTestsGeneratorLibrary.Models
             return result;
         }
 
-        private static IEnumerable<ArgumentModel> GetConstructorArguments(ClassDeclarationSyntax classDeclarationSyntax)
+        private static List<ArgumentModel> GetConstructorArguments(ClassDeclarationSyntax classDeclarationSyntax)
         {
             var constructors =  classDeclarationSyntax
                 .ChildNodes()
@@ -48,9 +50,20 @@ namespace UnitTestsGeneratorLibrary.Models
                 }).ToList();
         }
 
-        public static IEnumerable<TestingClassModel> ParseSyntaxNode(SyntaxNode syntaxNode)
+        private static List<string> FindUsedNamespaces(SyntaxNode syntaxNode)
+        {
+            return syntaxNode
+                .ChildNodes()
+                .OfType<UsingDirectiveSyntax>()
+                .Select(nm => nm.Name.ToString())
+                .ToList();
+        }
+
+        public static List<TestingClassModel> ParseSyntaxNode(SyntaxNode syntaxNode)
         {
             var classes = GetClassesDeclarations(syntaxNode);
+
+            var namespaces = FindUsedNamespaces(syntaxNode);
 
             var classList = new List<TestingClassModel>();
             foreach (var classDeclaration in classes)
@@ -61,7 +74,8 @@ namespace UnitTestsGeneratorLibrary.Models
                 {
                     ClassName = classDeclaration.Identifier.ToString(),
                     ConstructorArguments = constructorArgs,
-                    Methods = methods
+                    Methods = methods,
+                    UsedNamespaces = namespaces
                 });
             }
 

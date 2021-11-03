@@ -10,9 +10,9 @@ namespace UnitTestsGeneratorLibrary.Models
     {
         public string MethodName { get; set; }
         
-        public IEnumerable<ArgumentModel> Arguments { get; set; }
+        public List<ArgumentModel> Arguments { get; set; }
 
-        public static IEnumerable<TestingMethodModel> GetPublicMethods(ClassDeclarationSyntax classDeclarationSyntax)
+        public static List<TestingMethodModel> GetPublicMethods(ClassDeclarationSyntax classDeclarationSyntax)
         {
             var methods = classDeclarationSyntax
                 .ChildNodes()
