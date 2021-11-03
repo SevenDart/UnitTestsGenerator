@@ -4,13 +4,13 @@ using UnitTestsGeneratorLibrary.Models;
 
 namespace UnitTestsGeneratorLibrary
 {
-    public class TestEnvironment
+    public class TestClassEnvironment
     {
         public string Filename { get; set; }
         
         public string SourceText { get; set; }
         
-        public IEnumerable<TestingClassModel> TestingClassModels { get; set; }
+        public List<TestingClassModel> TestingClassModels { get; set; }
         
         public SyntaxTree GeneratedSyntaxTree { get; set; }
     }
