@@ -10,6 +10,8 @@ namespace UnitTestsGeneratorLibrary.Models
     {
         public string MethodName { get; set; }
         
+        public ArgumentModel ReturnType { get; set; }
+        
         public List<ArgumentModel> Arguments { get; set; }
 
         public static List<TestingMethodModel> GetPublicMethods(ClassDeclarationSyntax classDeclarationSyntax)
@@ -25,12 +27,16 @@ namespace UnitTestsGeneratorLibrary.Models
                 var methodArguments = method.ParameterList.Parameters.Select(parameter => new ArgumentModel
                 {
                     Name = parameter.Identifier.ToString(),
-                    Type = parameter.Type.ToString()
+                    ArgType = parameter.Type.ToString(),
                 }).ToList();
                 methodList.Add(new TestingMethodModel()
                 {
                     MethodName = method.Identifier.ToString(),
-                    Arguments = methodArguments
+                    Arguments = methodArguments,
+                    ReturnType = new ArgumentModel()
+                    {
+                        ArgType = method.ReturnType.ToString(),
+                    }
                 });
             }
 

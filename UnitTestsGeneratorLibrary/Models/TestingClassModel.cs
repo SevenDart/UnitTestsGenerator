@@ -37,26 +37,41 @@ namespace UnitTestsGeneratorLibrary.Models
                 .OfType<ConstructorDeclarationSyntax>()
                 .OrderByDescending(
                     c => c.ParameterList.Parameters.Count
-                    );
-            
-            return constructors
-                .First()
-                .ParameterList
-                .Parameters
-                .Select(parameter => new ArgumentModel
-                {
-                    Name = parameter.Identifier.ToString(),
-                    Type = parameter.Type.ToString()
-                }).ToList();
+                    )
+                .ToList();
+
+            if (constructors.Count != 0)
+            {
+                return constructors
+                    .First()
+                    .ParameterList
+                    .Parameters
+                    .Select(parameter => new ArgumentModel
+                    {
+                        Name = parameter.Identifier.ToString(),
+                        ArgType = parameter.Type.ToString()
+                    }).ToList();
+            }
+
+            return new List<ArgumentModel>();
         }
 
         private static List<string> FindUsedNamespaces(SyntaxNode syntaxNode)
         {
-            return syntaxNode
+            var list = syntaxNode
                 .ChildNodes()
                 .OfType<UsingDirectiveSyntax>()
                 .Select(nm => nm.Name.ToString())
                 .ToList();
+
+            var thisNamespace = syntaxNode.ChildNodes().OfType<NamespaceDeclarationSyntax>().SingleOrDefault();
+
+            if (thisNamespace != null)
+            {
+                list.Add(thisNamespace.Name.ToString());
+            }
+            
+            return list;
         }
 
         public static List<TestingClassModel> ParseSyntaxNode(SyntaxNode syntaxNode)
