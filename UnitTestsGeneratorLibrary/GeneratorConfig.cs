@@ -8,8 +8,8 @@ namespace UnitTestsGeneratorLibrary
         
         public string EndpointFolder { get; set; }
         
-        public int MaxNumberOfLoadedFilesAtOnce { get; set; }
-        
-        public int MaxDegreeOfParallelism { get; set; }
+        public int MaxParallelLoadCount { get; set; }
+        public int MaxParallelWriteCount { get; set; }
+        public int MaxParallelExecCount { get; set; }
     }
 }

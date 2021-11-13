@@ -14,37 +14,35 @@ namespace UnitTestsGeneratorLibrary
 {
     public class UnitTestsGenerator : IUnitTestsGenerator
     {
-        private readonly TransformBlock<string, TestClassEnvironment> _readFileBlock;
-        private readonly TransformBlock<TestClassEnvironment, TestClassEnvironment> _parseFileBlock;
-        private readonly TransformBlock<TestClassEnvironment, TestClassEnvironment> _createTestSyntaxTreeBlock;
-        private readonly ActionBlock<TestClassEnvironment> _writeToFileBlock;
-
         private GeneratorConfig _generatorConfig;
-
-        public UnitTestsGenerator()
-        {
-            _readFileBlock = new TransformBlock<string, TestClassEnvironment>(ReadFile);
-            _parseFileBlock = new TransformBlock<TestClassEnvironment, TestClassEnvironment>(ParseFile);
-            _createTestSyntaxTreeBlock = new TransformBlock<TestClassEnvironment, TestClassEnvironment>(GenerateSyntaxTreeOfTestClass);
-            _writeToFileBlock = new ActionBlock<TestClassEnvironment>(WriteToFile);
-
-            var linkOptions = new DataflowLinkOptions() {PropagateCompletion = true};
-            
-            _readFileBlock.LinkTo(_parseFileBlock, linkOptions);
-            _parseFileBlock.LinkTo(_createTestSyntaxTreeBlock, linkOptions);
-            _createTestSyntaxTreeBlock.LinkTo(_writeToFileBlock, linkOptions);
-        }
-        
+        private TransformBlock<string, TestClassEnvironment> _readFileBlock;
+        private TransformBlock<TestClassEnvironment, TestClassEnvironment> _parseFileBlock;
+        private TransformBlock<TestClassEnvironment, TestClassEnvironment> _createTestSyntaxTreeBlock;
+        private ActionBlock<TestClassEnvironment> _writeToFileBlock;
         
         public async Task GenerateTests(GeneratorConfig generatorConfig)
         {
             _generatorConfig = generatorConfig;
+
+            _readFileBlock = new TransformBlock<string, TestClassEnvironment>(ReadFile, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelLoadCount});
+            _parseFileBlock = new TransformBlock<TestClassEnvironment, TestClassEnvironment>(ParseFile, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelExecCount});
+            _createTestSyntaxTreeBlock = new TransformBlock<TestClassEnvironment, TestClassEnvironment>(GenerateSyntaxTreeOfTestClass, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelExecCount});
+            _writeToFileBlock = new ActionBlock<TestClassEnvironment>(WriteToFile, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelLoadCount});
+
+            var linkOptions = new DataflowLinkOptions() {PropagateCompletion = true};
+
+            _readFileBlock.LinkTo(_parseFileBlock, linkOptions);
+            _parseFileBlock.LinkTo(_createTestSyntaxTreeBlock, linkOptions);
+            _createTestSyntaxTreeBlock.LinkTo(_writeToFileBlock, linkOptions);
+
             foreach (var filename in _generatorConfig.Filenames)
             {
                 _readFileBlock.Post(filename);
+                _readFileBlock.Complete();
+                
                 await _writeToFileBlock.Completion;
             }
-            
+
         }
 
         //First TransformBlock<string, TestEnvironment> to read file
@@ -82,7 +80,7 @@ namespace UnitTestsGeneratorLibrary
                 : null;
         }
         
-        //Third ActionBlock<TestEnvironment> to create a syntaxTree
+        //Third TransformBlock<TestEnvironment,TestEnvironment> to create a syntaxTree
         private TestClassEnvironment GenerateSyntaxTreeOfTestClass(TestClassEnvironment testClassEnvironment)
         {
             var root = SyntaxFactory.CompilationUnit();
@@ -258,7 +256,7 @@ namespace UnitTestsGeneratorLibrary
 
             var root = await testClassEnvironment.GeneratedSyntaxTree.GetRootAsync();
             
-            root.NormalizeWhitespace().WriteTo(streamWriter);
+            await streamWriter.WriteAsync(root.NormalizeWhitespace().ToString());
         }
     }
 }
