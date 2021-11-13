@@ -19,6 +19,8 @@ namespace UnitTestsGeneratorLibrary
         private readonly TransformBlock<TestClassEnvironment, TestClassEnvironment> _createTestSyntaxTreeBlock;
         private readonly ActionBlock<TestClassEnvironment> _writeToFileBlock;
 
+        private GeneratorConfig _generatorConfig;
+
         public UnitTestsGenerator()
         {
             _readFileBlock = new TransformBlock<string, TestClassEnvironment>(ReadFile);
@@ -36,7 +38,8 @@ namespace UnitTestsGeneratorLibrary
         
         public async Task GenerateTests(GeneratorConfig generatorConfig)
         {
-            foreach (var filename in generatorConfig.Filenames)
+            _generatorConfig = generatorConfig;
+            foreach (var filename in _generatorConfig.Filenames)
             {
                 _readFileBlock.Post(filename);
                 await _writeToFileBlock.Completion;
@@ -49,9 +52,12 @@ namespace UnitTestsGeneratorLibrary
         {
             using var streamReader = new StreamReader(filename);
 
+            var testFilename = Path.GetFileName(filename);
+            testFilename = testFilename[..^2] + "Tests.cs";
+            
             return new TestClassEnvironment()
             {
-                Filename = filename,
+                Filename = $"{_generatorConfig.EndpointFolder}\\{testFilename}",
                 SourceText = await streamReader.ReadToEndAsync()
             };
         }
@@ -91,7 +97,7 @@ namespace UnitTestsGeneratorLibrary
             root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("Moq")));
 
             //Create namespace for file
-            var namespaceDeclaration = SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName("TestNamespace"));
+            var namespaceDeclaration = SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(new DirectoryInfo(_generatorConfig.EndpointFolder).Name));
 
             //Create test classes
             foreach (var classModel in testClassEnvironment.TestingClassModels)
@@ -101,11 +107,24 @@ namespace UnitTestsGeneratorLibrary
                 //Create mocked dependencies for class
                 foreach (var constructorArgument in classModel.ConstructorArguments)
                 {
-                    var mockedArgument = SyntaxFactory.FieldDeclaration(
-                        SyntaxFactory.VariableDeclaration(
-                            SyntaxFactory.ParseTypeName("Mock<" + constructorArgument.Name + ">")
+                    FieldDeclarationSyntax mockedArgument;
+                    if (constructorArgument.ArgType[0] == 'I')
+                    {
+                        mockedArgument = SyntaxFactory.FieldDeclaration(
+                            SyntaxFactory.VariableDeclaration(
+                                SyntaxFactory.ParseTypeName("Mock<" + constructorArgument.ArgType + ">")
                             ).AddVariables(SyntaxFactory.VariableDeclarator("_" + constructorArgument.Name))
-                    );
+                        );
+                    }
+                    else
+                    {
+                        mockedArgument = SyntaxFactory.FieldDeclaration(
+                            SyntaxFactory.VariableDeclaration(
+                                SyntaxFactory.ParseTypeName(constructorArgument.ArgType)
+                            ).AddVariables(SyntaxFactory.VariableDeclarator("_" + constructorArgument.Name))
+                        );
+                    }
+
                     testClassDeclaration = testClassDeclaration.AddMembers(mockedArgument);
                 }
                 
@@ -118,9 +137,10 @@ namespace UnitTestsGeneratorLibrary
                 testClassDeclaration = testClassDeclaration.AddMembers(testingClassDeclaration);
                 
                 //Create setup method
-                var setupMethod = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName("void"), "Setup");
-
-                setupMethod = setupMethod.AddAttributeLists(
+                var setupMethod = SyntaxFactory
+                    .MethodDeclaration(SyntaxFactory.ParseTypeName("void"), "Setup")
+                    .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+                    .AddAttributeLists(
                     SyntaxFactory.AttributeList(
                         SyntaxFactory.SeparatedList<AttributeSyntax>().Add(
                             SyntaxFactory.Attribute(SyntaxFactory.ParseName("SetUp"))
@@ -132,8 +152,17 @@ namespace UnitTestsGeneratorLibrary
                 var constructorArgs = new StringBuilder();
                 foreach (var dependency in classModel.ConstructorArguments)
                 {
-                    constructorArgs.Append($"_{dependency.Name},");
-                    var statementTexted = $"_{dependency.Name} = new Mock<{dependency.Type}>();";
+                    string statementTexted;
+                    if (dependency.ArgType[0] == 'I')
+                    {
+                        constructorArgs.Append($"_{dependency.Name}.Object,");
+                        statementTexted = $"_{dependency.Name} = new Mock<{dependency.ArgType}>();";                        
+                    }
+                    else
+                    {
+                        constructorArgs.Append($"_{dependency.Name},");
+                        statementTexted = $"_{dependency.Name} = {ArgumentModel.GetDefaultValue(dependency.TryToParseType())};";
+                    }
                     var constructStatement = SyntaxFactory.ParseStatement(statementTexted);
                     setupMethod = setupMethod.AddBodyStatements(constructStatement);
                 }
@@ -144,14 +173,74 @@ namespace UnitTestsGeneratorLibrary
                 }
                 
                 //construct testing class
-                var classConstructTexted = $"_{Char.ToLower(classModel.ClassName[0])}{classModel.ClassName[1..]} = new {classModel.ClassName}({constructorArgs});";
+                var classVariable = $"_{Char.ToLower(classModel.ClassName[0])}{classModel.ClassName[1..]}";
+                var classConstructTexted = $"{classVariable} = new {classModel.ClassName}({constructorArgs});";
                 var constructClassStatement = SyntaxFactory.ParseStatement(classConstructTexted);
                 setupMethod = setupMethod.AddBodyStatements(constructClassStatement);
                 
-                setupMethod = setupMethod.AddBodyStatements();
-
                 testClassDeclaration = testClassDeclaration.AddMembers(setupMethod);
                 
+                //create tests
+                foreach (var testingMethod in classModel.Methods)
+                {
+                    //create test method
+                    var methodDeclaration = SyntaxFactory
+                        .MethodDeclaration(SyntaxFactory.ParseTypeName("void"), $"{testingMethod.MethodName}_Test")
+                        .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+                        .AddAttributeLists(
+                        SyntaxFactory.AttributeList(
+                            SyntaxFactory.SeparatedList<AttributeSyntax>().Add(
+                                SyntaxFactory.Attribute(SyntaxFactory.ParseName("Test"))
+                            )
+                        )
+                    );
+
+                    //Arrange statements
+                    var methodArgs = new StringBuilder();
+                    foreach (var argument in testingMethod.Arguments)
+                    {
+                        methodArgs.Append($"{argument.Name},");
+                        var defaultValue = ArgumentModel.GetDefaultValue(argument.TryToParseType());
+                        var stringifyDefaultValue = defaultValue == null ? "null" : defaultValue.ToString();
+                        var textedStatement = $"{argument.ArgType} {argument.Name} = {stringifyDefaultValue};";
+                        var parsedStatement = SyntaxFactory.ParseStatement(textedStatement);
+                        methodDeclaration = methodDeclaration.AddBodyStatements(parsedStatement);
+                    }
+                    
+                    if (methodArgs.Length != 0)
+                    {
+                        methodArgs.Remove(methodArgs.Length - 1, 1);
+                    }
+                    
+                    //Act statement
+                    var actStatement = $"{classVariable}.{testingMethod.MethodName}({methodArgs});";
+                    if (testingMethod.ReturnType.TryToParseType() != typeof(void))
+                    {
+                        actStatement = $"{testingMethod.ReturnType.ArgType} result = " + actStatement;
+                    }
+                    var parsedActStatement = SyntaxFactory.ParseStatement(actStatement);
+                    methodDeclaration = methodDeclaration.AddBodyStatements(parsedActStatement);
+                    
+                    
+                    //Assert statements
+                    if (testingMethod.ReturnType.TryToParseType() != typeof(void))
+                    {
+                        var defaultValue = ArgumentModel.GetDefaultValue(testingMethod.ReturnType.TryToParseType());
+                        var stringifyDefaultValue = defaultValue == null ? "null" : defaultValue.ToString();
+                        var expectedResult = SyntaxFactory.ParseStatement(
+                            $"{testingMethod.ReturnType.ArgType} expected = {stringifyDefaultValue};"
+                            );
+                        var expectedAssert = SyntaxFactory.ParseStatement("Assert.That(result, Is.EqualTo(expected));");
+
+                        methodDeclaration = methodDeclaration.AddBodyStatements(expectedResult, expectedAssert);
+                    }
+                    
+                    var failAssert = SyntaxFactory.ParseStatement("Assert.Fail(\"autogenerated\");");
+                    methodDeclaration = methodDeclaration.AddBodyStatements(failAssert);
+                    
+                    testClassDeclaration = testClassDeclaration.AddMembers(methodDeclaration);
+                }
+
                 namespaceDeclaration = namespaceDeclaration.AddMembers(testClassDeclaration);
             }
 
@@ -162,13 +251,10 @@ namespace UnitTestsGeneratorLibrary
             return testClassEnvironment;
         }
 
-
         //Fourth ActionBlock<TestClassEnvironment> to write a file
         private async Task WriteToFile(TestClassEnvironment testClassEnvironment)
         {
-            await using var streamWriter = new StreamWriter(
-                testClassEnvironment.Filename.Substring(0, testClassEnvironment.Filename.Length - 2)
-                + "Tests.cs");
+            await using var streamWriter = new StreamWriter(testClassEnvironment.Filename);
 
             var root = await testClassEnvironment.GeneratedSyntaxTree.GetRootAsync();
             
