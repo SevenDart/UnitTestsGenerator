@@ -24,7 +24,7 @@ namespace UnitTestsGeneratorLibrary
 
             _readFileBlock = new TransformBlock<string, TestClassEnvironment>(ReadFile, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelLoadCount});
             _processTestingFile = new TransformBlock<TestClassEnvironment, TestClassEnvironment>(ProcessTestingFile, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelExecCount});
-            _writeToFileBlock = new ActionBlock<TestClassEnvironment>(WriteToFile, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelLoadCount});
+            _writeToFileBlock = new ActionBlock<TestClassEnvironment>(WriteToFile, new ExecutionDataflowBlockOptions() {MaxDegreeOfParallelism = _generatorConfig.MaxParallelWriteCount});
 
             var linkOptions = new DataflowLinkOptions() {PropagateCompletion = true};
 
