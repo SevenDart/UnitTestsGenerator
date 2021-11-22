@@ -45,7 +45,7 @@ namespace UnitTestsGeneratorLibrary.Tests
         }
 
         [Test]
-        public void CreateClassATests()
+        public async Task CreateClassATests()
         {
             //Arrange
             var generatorConfig = new GeneratorConfig();
@@ -54,11 +54,17 @@ namespace UnitTestsGeneratorLibrary.Tests
             generatorConfig.EndpointFolder = EndpointTestFolder;
             
             //Act
-            _generator.GenerateTests(generatorConfig);
-            var results = ParseTestFile(ClassAFilename);
+            await _generator.GenerateTests(generatorConfig);
+            var results = await ParseTestFile(ClassAFilename);
 
             //Assert
+            var testMethods = results
+                .TestingClassModels
+                .SelectMany(tcm => tcm.Methods)
+                .Where(m => m.MethodName.Contains("Test"))
+                .ToList();
             
+            Assert.AreEqual(3, testMethods.Count);
             CleanTestFiles();
         }
         
