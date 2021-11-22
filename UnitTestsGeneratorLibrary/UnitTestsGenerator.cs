@@ -34,10 +34,10 @@ namespace UnitTestsGeneratorLibrary
             foreach (var filename in _generatorConfig.Filenames)
             {
                 _readFileBlock.Post(filename);
-                _readFileBlock.Complete();
-                await _writeToFileBlock.Completion;
             }
-
+            
+            _readFileBlock.Complete();
+            await _writeToFileBlock.Completion;
         }
 
         //First TransformBlock<string, TestEnvironment> to read file
@@ -98,6 +98,8 @@ namespace UnitTestsGeneratorLibrary
                     );
                 }
 
+                mockedArgument = mockedArgument.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
+
                 testClassDeclaration = testClassDeclaration.AddMembers(mockedArgument);
             }
                 
@@ -107,6 +109,9 @@ namespace UnitTestsGeneratorLibrary
                         SyntaxFactory.ParseTypeName(classModel.ClassName)
                     ).AddVariables(SyntaxFactory.VariableDeclarator($"_{Char.ToLower(classModel.ClassName[0])}{classModel.ClassName[1..]}"))
                 );
+
+            testingClassDeclaration = testingClassDeclaration.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
+            
             testClassDeclaration = testClassDeclaration.AddMembers(testingClassDeclaration);
                 
             //Create setup method
@@ -260,7 +265,7 @@ namespace UnitTestsGeneratorLibrary
             return testClassEnvironment;
         }
 
-        //Fourth ActionBlock<TestClassEnvironment> to write a file
+        //Third ActionBlock<TestClassEnvironment> to write a file
         private async Task WriteToFile(TestClassEnvironment testClassEnvironment)
         {
             if (testClassEnvironment == null)
