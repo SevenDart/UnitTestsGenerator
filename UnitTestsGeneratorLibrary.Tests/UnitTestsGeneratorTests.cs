@@ -11,8 +11,10 @@ namespace UnitTestsGeneratorLibrary.Tests
     {
         private IUnitTestsGenerator _generator;
 
-        private const string ClassAFilename = @"D:\CODE\Csharp\UnitTestsGenerator\SampleLibrary\ClassA.cs";
-        private const string ClassBFilename = @"D:\CODE\Csharp\UnitTestsGenerator\SampleLibrary\ClassB.cs";
+        private const string TestClassAFilename = "ClassA.Tests.cs";
+        private const string TestClassBFilename = "ClassB.Tests.cs";
+        private const string ClassAFullPath = @"D:\CODE\Csharp\UnitTestsGenerator\SampleLibrary\ClassA.cs";
+        private const string ClassBFullPath = @"D:\CODE\Csharp\UnitTestsGenerator\SampleLibrary\ClassB.cs";
 
         private const string EndpointTestFolder = @"D:\CODE\Csharp\UnitTestsGenerator\SampleLibrary.Tests\";
 
@@ -34,8 +36,8 @@ namespace UnitTestsGeneratorLibrary.Tests
 
         private void CleanTestFiles()
         {
-            File.Delete(ClassAFilename);
-            File.Delete(ClassBFilename);
+            File.Delete(EndpointTestFolder + TestClassAFilename);
+            File.Delete(EndpointTestFolder + TestClassBFilename);
         }
         
         [SetUp]
@@ -50,12 +52,12 @@ namespace UnitTestsGeneratorLibrary.Tests
             //Arrange
             var generatorConfig = new GeneratorConfig();
             
-            generatorConfig.Filenames.Add(ClassAFilename);
+            generatorConfig.Filenames.Add(ClassAFullPath);
             generatorConfig.EndpointFolder = EndpointTestFolder;
             
             //Act
             await _generator.GenerateTests(generatorConfig);
-            var results = await ParseTestFile(ClassAFilename);
+            var results = await ParseTestFile(EndpointTestFolder + TestClassAFilename);
 
             //Assert
             var testMethods = results
@@ -65,6 +67,64 @@ namespace UnitTestsGeneratorLibrary.Tests
                 .ToList();
             
             Assert.AreEqual(3, testMethods.Count);
+            CleanTestFiles();
+        }
+        
+        
+        [Test]
+        public async Task CreateClassBTests()
+        {
+            //Arrange
+            var generatorConfig = new GeneratorConfig();
+            
+            generatorConfig.Filenames.Add(ClassBFullPath);
+            generatorConfig.EndpointFolder = EndpointTestFolder;
+            
+            //Act
+            await _generator.GenerateTests(generatorConfig);
+            var results = await ParseTestFile(EndpointTestFolder + TestClassBFilename);
+
+            //Assert
+            var testMethods = results
+                .TestingClassModels
+                .SelectMany(tcm => tcm.Methods)
+                .Where(m => m.MethodName.Contains("Test"))
+                .ToList();
+            
+            Assert.AreEqual(1, testMethods.Count);
+            CleanTestFiles();
+        }
+        
+        [Test]
+        public async Task CreateClassAandBTests()
+        {
+            //Arrange
+            var generatorConfig = new GeneratorConfig();
+            
+            generatorConfig.Filenames.Add(ClassAFullPath);
+            generatorConfig.Filenames.Add(ClassBFullPath);
+            generatorConfig.EndpointFolder = EndpointTestFolder;
+            
+            //Act
+            await _generator.GenerateTests(generatorConfig);
+            var resultsOfClassA = await ParseTestFile(EndpointTestFolder + TestClassAFilename);
+            var resultsOfClassB = await ParseTestFile(EndpointTestFolder + TestClassBFilename);
+
+            //Assert
+            var testMethodsOfA = resultsOfClassA
+                .TestingClassModels
+                .SelectMany(tcm => tcm.Methods)
+                .Where(m => m.MethodName.Contains("Test"))
+                .ToList();
+            
+            var testMethodsOfB = resultsOfClassB
+                .TestingClassModels
+                .SelectMany(tcm => tcm.Methods)
+                .Where(m => m.MethodName.Contains("Test"))
+                .ToList();
+            
+            Assert.AreEqual(3, testMethodsOfA.Count);
+            Assert.AreEqual(1, testMethodsOfB.Count);
             CleanTestFiles();
         }
         
